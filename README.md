@@ -19,8 +19,10 @@ The tool generates two annotated files: **deletions** are marked on the old vers
 * Not confused by moving figures, tables, or math formulas.
 <!-- * Uses PyMuPDF for fast, word-level difference detection. -->
 
+[![PyPI version](https://img.shields.io/pypi/v/pdfdelta)](https://pypi.org/project/pdfdelta/) [![Python](https://img.shields.io/pypi/pyversions/pdfdelta)](https://pypi.org/project/pdfdelta/)
+
 ## Installation
-Via PyPI:
+Via [PyPI](https://pypi.org/project/pdfdelta/):
 ```sh
 pip install pdfdelta
 ```

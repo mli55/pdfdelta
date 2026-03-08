@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pdfdelta"
-version = "0.1.1"
+version = "0.1.2"
 description = "Visual diff for born-digital PDFs — highlights changes directly on the original pages"
 readme = "README.md"
 license = {text = "MIT"}
@@ -28,3 +28,9 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[project.urls]
+Homepage = "https://github.com/mli55/pdfdelta"
+Repository = "https://github.com/mli55/pdfdelta"
+Issues = "https://github.com/mli55/pdfdelta/issues"
+Changelog = "https://github.com/mli55/pdfdelta/releases"
