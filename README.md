@@ -20,7 +20,7 @@ The tool generates two annotated files: **deletions** are marked on the old vers
 <!-- * Uses PyMuPDF for fast, word-level difference detection. -->
 
 ## Installation
-
+Via PyPI:
 ```sh
 pip install pdfdelta
 ```

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pdfdelta"
-version = "0.1.0"
+version = "0.1.1"
 description = "Visual diff for born-digital PDFs — highlights changes directly on the original pages"
 readme = "README.md"
 license = {text = "MIT"}
