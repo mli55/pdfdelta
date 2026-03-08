@@ -5,8 +5,8 @@
 The tool generates two annotated files: **deletions** are marked on the old version, and **additions** are marked on the new version.
 
 <p align="center">
-  <img src="examples/old_marked.png" alt="Old PDF with deletions" width="48%" />
-  <img src="examples/new_marked.png" alt="New PDF with additions" width="48%" />
+  <img src="https://raw.githubusercontent.com/mli55/pdfdelta/main/examples/old_marked.png" alt="Old PDF with deletions highlighted" width="48%" />
+  <img src="https://raw.githubusercontent.com/mli55/pdfdelta/main/examples/new_marked.png" alt="New PDF with additions highlighted" width="48%" />
 </p>
 
 <!-- --- -->
