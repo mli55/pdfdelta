@@ -1,10 +1,56 @@
 from __future__ import annotations
 
+import re
 from collections import Counter, defaultdict
+from dataclasses import dataclass
 from difflib import SequenceMatcher
 from typing import DefaultDict
 
 from .models import LineBox, PageBox, RectTuple, WordBox
+
+
+@dataclass(frozen=True)
+class DiffUnit:
+    norm: str
+    words: tuple[WordBox, ...]
+
+
+def _fold_hyphens(norm: str) -> str:
+    """Normalize word hyphen variants without touching minus signs."""
+    return re.sub(r"(?<=[^\W\d_])-(?=[^\W\d_])", "", norm)
+
+
+def _word_diff_units(words: list[WordBox]) -> list[DiffUnit]:
+    """Build word-diff units with line-break hyphenation folded.
+
+    A PDF line break can expose one logical word as two extracted words,
+    e.g. ``"se-"`` + ``"lected"``.  Compare that as ``"selected"`` while
+    keeping the original word boxes so annotations still land precisely.
+    Word-internal hyphens are folded in the comparison key so a compound
+    split at a line end (``"contact-"`` + ``"admission"``) matches its
+    unsplit form (``"contact-admission"``), without treating minus signs as
+    word hyphens.
+    """
+    units: list[DiffUnit] = []
+    i = 0
+    while i < len(words):
+        word = words[i]
+        if word.norm.endswith("-") and len(word.norm) > 1 and i + 1 < len(words):
+            next_word = words[i + 1]
+            joined = word.norm[:-1] + next_word.norm
+            units.append(
+                DiffUnit(
+                    norm=_fold_hyphens(joined),
+                    words=(word, next_word),
+                )
+            )
+            i += 2
+            continue
+
+        units.append(DiffUnit(norm=_fold_hyphens(word.norm), words=(word,)))
+        i += 1
+
+    return units
 
 
 def _sub_word_rect(
@@ -59,8 +105,10 @@ def _chunk_word_diff(
     old_words = [w for line in old_chunk for w in line.words]
     new_words = [w for line in new_chunk for w in line.words]
 
-    old_tokens = [w.norm for w in old_words]
-    new_tokens = [w.norm for w in new_words]
+    old_units = _word_diff_units(old_words)
+    new_units = _word_diff_units(new_words)
+    old_tokens = [u.norm for u in old_units]
+    new_tokens = [u.norm for u in new_units]
 
     sm = SequenceMatcher(a=old_tokens, b=new_tokens, autojunk=False)
     old_rects: list[RectTuple] = []
@@ -69,16 +117,22 @@ def _chunk_word_diff(
     for tag, i1, i2, j1, j2 in sm.get_opcodes():
         if tag == "equal":
             continue
-        if tag == "replace" and (i2 - i1) == 1 and (j2 - j1) == 1:
+        if (
+            tag == "replace"
+            and (i2 - i1) == 1
+            and (j2 - j1) == 1
+            and len(old_units[i1].words) == 1
+            and len(new_units[j1].words) == 1
+        ):
             # Single word replaced by single word — use sub-word precision
-            o_r, n_r = _sub_word_rect(old_words[i1], new_words[j1])
+            o_r, n_r = _sub_word_rect(old_units[i1].words[0], new_units[j1].words[0])
             old_rects.append(o_r)
             new_rects.append(n_r)
         else:
             if tag in ("delete", "replace"):
-                old_rects.extend(w.rect for w in old_words[i1:i2])
+                old_rects.extend(w.rect for u in old_units[i1:i2] for w in u.words)
             if tag in ("insert", "replace"):
-                new_rects.extend(w.rect for w in new_words[j1:j2])
+                new_rects.extend(w.rect for u in new_units[j1:j2] for w in u.words)
 
     return old_rects, new_rects
 
@@ -298,24 +352,36 @@ def compare_documents(
         if not old_words and not new_words:
             continue
 
-        old_norms = [w.norm for w in old_words]
-        new_norms = [w.norm for w in new_words]
+        old_units = _word_diff_units(old_words)
+        new_units = _word_diff_units(new_words)
+        old_norms = [u.norm for u in old_units]
+        new_norms = [u.norm for u in new_units]
 
         sm2 = SequenceMatcher(a=old_norms, b=new_norms, autojunk=False)
         for op_tag, oi1, oi2, oj1, oj2 in sm2.get_opcodes():
             if op_tag == "equal":
                 continue
-            if op_tag == "replace" and (oi2 - oi1) == 1 and (oj2 - oj1) == 1:
-                o_r, n_r = _sub_word_rect(old_words[oi1], new_words[oj1])
-                old_cands.append((old_words[oi1], o_r, o_r != old_words[oi1].rect))
-                new_cands.append((new_words[oj1], n_r, n_r != new_words[oj1].rect))
+            if (
+                op_tag == "replace"
+                and (oi2 - oi1) == 1
+                and (oj2 - oj1) == 1
+                and len(old_units[oi1].words) == 1
+                and len(new_units[oj1].words) == 1
+            ):
+                old_word = old_units[oi1].words[0]
+                new_word = new_units[oj1].words[0]
+                o_r, n_r = _sub_word_rect(old_word, new_word)
+                old_cands.append((old_word, o_r, o_r != old_word.rect))
+                new_cands.append((new_word, n_r, n_r != new_word.rect))
             else:
                 if op_tag in ("delete", "replace"):
-                    for w in old_words[oi1:oi2]:
-                        old_cands.append((w, w.rect, False))
+                    for unit in old_units[oi1:oi2]:
+                        for w in unit.words:
+                            old_cands.append((w, w.rect, False))
                 if op_tag in ("insert", "replace"):
-                    for w in new_words[oj1:oj2]:
-                        new_cands.append((w, w.rect, False))
+                    for unit in new_units[oj1:oj2]:
+                        for w in unit.words:
+                            new_cands.append((w, w.rect, False))
 
     # ── Second pass: page-boundary reflow suppression ──────────────
     # For each pair of adjacent pages (old_pg P, new_pg P±1), compare
