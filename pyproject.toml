@@ -1,15 +1,26 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "pdfdelta"
 version = "0.1.2"
-description = "Visual diff for born-digital PDFs — highlights changes directly on the original pages"
-readme = "README.md"
-license = {text = "MIT"}
+description = "Visual PDF diff for academic papers, optimized for paper revisions"
+readme = {file = "README.md", content-type = "text/markdown"}
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
-keywords = ["pdf", "diff", "compare", "highlight", "academic", "paper"]
+keywords = [
+    "pdf diff",
+    "visual PDF diff",
+    "compare PDFs",
+    "PDF comparison",
+    "academic paper revision",
+    "LaTeX PDF diff",
+    "born-digital PDF",
+    "document comparison",
+    "visual change tracking",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
