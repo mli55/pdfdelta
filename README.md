@@ -35,30 +35,7 @@ This writes two annotated PDFs in the current directory:
 
 pdfdelta is a lightweight CLI for visual PDF diff, PDF comparison, document comparison, and LaTeX PDF diff workflows where the PDF itself is the review artifact.
 
-## Installation
-
-Via [PyPI](https://pypi.org/project/pdfdelta/):
-
-```sh
-pip install pdfdelta
-```
-
-To install directly from the repository:
-
-```sh
-pip install git+https://github.com/mli55/pdfdelta.git
-```
-
 ## Usage
-
-```sh
-pdfdelta old.pdf new.pdf
-```
-
-This writes:
-
-- `old_marked.pdf` - original pages with deletions highlighted
-- `new_marked.pdf` - revised pages with additions highlighted
 
 ### Options
 
@@ -74,6 +51,12 @@ This writes:
 pdfdelta examples/old.pdf examples/new.pdf \
   --old-out examples/old_marked.pdf \
   --new-out examples/new_marked.pdf
+```
+
+To install directly from the repository:
+
+```sh
+pip install git+https://github.com/mli55/pdfdelta.git
 ```
 
 ### Python API Example
@@ -93,13 +76,6 @@ old_rects, new_rects = compare_documents(old_pages, new_pages)
 apply_annotations("old.pdf", "old_marked.pdf", old_rects, color=(1.0, 0.0, 0.0))
 apply_annotations("new.pdf", "new_marked.pdf", new_rects, color=(0.0, 1.0, 0.0))
 ```
-
-## Features
-
-- **Direct annotation**: Highlights changes as native PDF annotations on the original layout.
-- **Layout aware**: Optimized for multi-column papers and technical reports.
-- **Noise reduction**: Filters out visual artifacts caused by simple text reflow across lines or pages.
-- **Structural support**: Better handling of figures and tables.
 
 ## Limitations
 
