@@ -383,16 +383,28 @@ def compare_documents(
                         for w in unit.words:
                             new_cands.append((w, w.rect, False))
 
-    # ── Second pass: page-boundary reflow suppression ──────────────
-    # For each pair of adjacent pages (old_pg P, new_pg P±1), compare
-    # ALL words from both pages using dehyphenation-aware normalization.
-    # Candidate words within contiguous matching runs of ≥ MIN_MATCH
-    # tokens are recognised as reflowed text and suppressed.
+    # ── Second pass: same-page / page-boundary reflow suppression ──
+    # For each pair of nearby pages (old_pg P, new_pg P+δ, δ ∈ {0, ±1}),
+    # compare ALL words from both pages using dehyphenation-aware
+    # normalization.  Candidate words within contiguous matching runs of
+    # ≥ MIN_MATCH tokens are recognised as reflowed text and suppressed.
+    # δ=0 matters too: repeated short lines (figure axis labels, running
+    # headers) can be mis-paired by the global line diff even when they
+    # sit unchanged on the same page, whenever other copies of the same
+    # text were genuinely added or removed elsewhere in the document.
     #
     # Within-page dehyphenation joins e.g. "aver-"+"age" → "average".
     # Cross-page hyphenation (where a figure sits between the two halves)
     # is handled via _is_hyph_match tolerance on 1:1 replace blocks.
     MIN_MATCH = 2
+    # Rounds of leftover re-matching per page pair (block-move detection).
+    MAX_MOVE_ROUNDS = 8
+    # Later rounds match blocks out of positional order, so a short run
+    # ("used in the real-world") can pair with an unrelated occurrence
+    # elsewhere on the page and punch holes in genuinely new text.
+    # Demand stronger evidence there; real moved blocks (figure labels,
+    # headers) are far longer than this.
+    MOVE_MIN_MATCH = 5
 
     suppress_old: set[int] = set()
     suppress_new: set[int] = set()
@@ -428,7 +440,7 @@ def compare_documents(
 
     checked: set[tuple[int, int]] = set()
     for old_pg in sorted(old_cand_pages):
-        for delta in (1, -1):
+        for delta in (0, 1, -1):
             new_pg = old_pg + delta
             if new_pg not in new_cand_pages:
                 continue
@@ -453,43 +465,76 @@ def compare_documents(
             old_tokens = [t for t, _ in old_dehyph]
             new_tokens = [t for t, _ in new_dehyph]
 
-            sm_b = SequenceMatcher(a=old_tokens, b=new_tokens, autojunk=False)
-            ops = list(sm_b.get_opcodes())
+            # Repeated monotonic matching = block-move detection.  A
+            # single SequenceMatcher pass is order-preserving, so when
+            # two blocks swap extraction order between versions (e.g. a
+            # figure's labels vs the body text around it, after a float
+            # relocates), only one of them can match.  After suppressing
+            # the runs found in a round, remove them and rematch the
+            # leftovers so displaced blocks get a chance to pair up.
+            # Hyphenation edge-repair needs full positional context, so
+            # it only runs in the first round.
+            old_active = list(range(len(old_tokens)))
+            new_active = list(range(len(new_tokens)))
 
-            for oi, (op, bi1, bi2, bj1, bj2) in enumerate(ops):
-                if op == "equal" and (bi2 - bi1) >= MIN_MATCH:
-                    _suppress(old_dehyph, bi1, bi2, old_words_pg,
-                              old_cand_lookup, suppress_old)
-                    _suppress(new_dehyph, bj1, bj2, new_words_pg,
-                              new_cand_lookup, suppress_new)
-                elif op == "replace":
-                    # Boundary tokens of a replace block next to a long
-                    # equal run may be hyphenation artifacts.  E.g.
-                    # "aver-" vs "average" or "particularly" vs "ticularly".
-                    # Leading edge (preceded by equal ≥ MIN_MATCH)
-                    if oi > 0:
-                        p = ops[oi - 1]
-                        if (p[0] == "equal" and (p[2] - p[1]) >= MIN_MATCH
-                                and _is_hyph_match(old_tokens[bi1],
-                                                   new_tokens[bj1])):
-                            _suppress(old_dehyph, bi1, bi1 + 1,
-                                      old_words_pg, old_cand_lookup,
-                                      suppress_old)
-                            _suppress(new_dehyph, bj1, bj1 + 1,
-                                      new_words_pg, new_cand_lookup,
-                                      suppress_new)
-                    # Trailing edge (followed by equal ≥ MIN_MATCH)
-                    if oi < len(ops) - 1:
-                        n = ops[oi + 1]
-                        if (n[0] == "equal" and (n[2] - n[1]) >= MIN_MATCH
-                                and _is_hyph_match(old_tokens[bi2 - 1],
-                                                   new_tokens[bj2 - 1])):
-                            _suppress(old_dehyph, bi2 - 1, bi2,
-                                      old_words_pg, old_cand_lookup,
-                                      suppress_old)
-                            _suppress(new_dehyph, bj2 - 1, bj2,
-                                      new_words_pg, new_cand_lookup,
-                                      suppress_new)
+            for round_no in range(MAX_MOVE_ROUNDS):
+                min_run = MIN_MATCH if round_no == 0 else MOVE_MIN_MATCH
+                a_toks = [old_tokens[k] for k in old_active]
+                b_toks = [new_tokens[k] for k in new_active]
+
+                sm_b = SequenceMatcher(a=a_toks, b=b_toks, autojunk=False)
+                ops = list(sm_b.get_opcodes())
+
+                matched_a: set[int] = set()
+                matched_b: set[int] = set()
+
+                for oi, (op, bi1, bi2, bj1, bj2) in enumerate(ops):
+                    if op == "equal" and (bi2 - bi1) >= min_run:
+                        for k in range(bi1, bi2):
+                            _suppress(old_dehyph, old_active[k],
+                                      old_active[k] + 1, old_words_pg,
+                                      old_cand_lookup, suppress_old)
+                        for k in range(bj1, bj2):
+                            _suppress(new_dehyph, new_active[k],
+                                      new_active[k] + 1, new_words_pg,
+                                      new_cand_lookup, suppress_new)
+                        matched_a.update(range(bi1, bi2))
+                        matched_b.update(range(bj1, bj2))
+                    elif op == "replace" and round_no == 0:
+                        # Boundary tokens of a replace block next to a long
+                        # equal run may be hyphenation artifacts.  E.g.
+                        # "aver-" vs "average" or "particularly" vs "ticularly".
+                        # Leading edge (preceded by equal ≥ MIN_MATCH)
+                        if oi > 0:
+                            p = ops[oi - 1]
+                            if (p[0] == "equal" and (p[2] - p[1]) >= MIN_MATCH
+                                    and _is_hyph_match(a_toks[bi1],
+                                                       b_toks[bj1])):
+                                _suppress(old_dehyph, old_active[bi1],
+                                          old_active[bi1] + 1, old_words_pg,
+                                          old_cand_lookup, suppress_old)
+                                _suppress(new_dehyph, new_active[bj1],
+                                          new_active[bj1] + 1, new_words_pg,
+                                          new_cand_lookup, suppress_new)
+                        # Trailing edge (followed by equal ≥ MIN_MATCH)
+                        if oi < len(ops) - 1:
+                            n = ops[oi + 1]
+                            if (n[0] == "equal" and (n[2] - n[1]) >= MIN_MATCH
+                                    and _is_hyph_match(a_toks[bi2 - 1],
+                                                       b_toks[bj2 - 1])):
+                                _suppress(old_dehyph, old_active[bi2 - 1],
+                                          old_active[bi2 - 1] + 1, old_words_pg,
+                                          old_cand_lookup, suppress_old)
+                                _suppress(new_dehyph, new_active[bj2 - 1],
+                                          new_active[bj2 - 1] + 1, new_words_pg,
+                                          new_cand_lookup, suppress_new)
+
+                if not matched_a:
+                    break
+                old_active = [k for i, k in enumerate(old_active)
+                              if i not in matched_a]
+                new_active = [k for i, k in enumerate(new_active)
+                              if i not in matched_b]
 
     # ── Map surviving candidates to pages ────────────────────────────
     old_map: DefaultDict[int, list[RectTuple]] = defaultdict(list)
