@@ -1,4 +1,4 @@
-# pdfdelta [![PyPI version](https://img.shields.io/pypi/v/pdfdelta)](https://pypi.org/project/pdfdelta/) [![Python](https://img.shields.io/pypi/pyversions/pdfdelta)](https://pypi.org/project/pdfdelta/)
+# pdfdelta [![PyPI version](https://img.shields.io/pypi/v/pdfdelta)](https://pypi.org/project/pdfdelta/) [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://pypi.org/project/pdfdelta/)
 
 pdfdelta: visual PDF diff for academic papers
 
