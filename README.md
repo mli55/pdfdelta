@@ -98,7 +98,9 @@ Please open an issue if you see bad alignment, missing highlights, unexpected hi
  Word-level and sub-word diff
    |
    v
- Reflow filter to suppress cross-page and cross-column noise
+ Move filter to suppress reflow noise across pages and columns,
+ and same-page block moves (e.g. swapped subfigures, repeated
+ figure labels)
    |
    v
  Annotate original PDFs
@@ -108,11 +110,12 @@ Please open an issue if you see bad alignment, missing highlights, unexpected hi
  new_marked.pdf
 ```
 
-## GitHub Metadata Recommendations
+## Changelog
 
-- **Description**: Visual PDF diff for academic papers, optimized for paper revisions.
-- **Website**: https://pypi.org/project/pdfdelta/
-- **Topics**: `pdf`, `diff`, `visual-diff`, `pdf-diff`, `document-comparison`, `latex`, `academic-writing`, `pymupdf`, `python`, `cli`
+### 0.1.4
+
+- Fixed false-positive highlights on repeated short labels (figure axis text, tick numbers, running headers): they could be marked as changed even when byte-identical, whenever other copies of the same text were added or removed elsewhere in the document.
+- Blocks that merely moved on the same page (for example swapped subfigures) are no longer highlighted; only genuine text edits are marked.
 
 ## License
 
